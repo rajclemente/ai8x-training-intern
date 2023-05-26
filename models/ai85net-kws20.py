@@ -23,7 +23,7 @@ class AI85KWS20Net(nn.Module):
     # num_classes = n keywords + 1 unknown
     def __init__(
             self,
-            num_classes=21,
+            num_classes=5,
             num_channels=128,
             dimensions=(128, 1),  # pylint: disable=unused-argument
             fc_inputs=7,

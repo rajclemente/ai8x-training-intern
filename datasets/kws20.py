@@ -70,13 +70,13 @@ class KWS:
     url_librispeech = 'http://us.openslr.org/resources/12/dev-clean.tar.gz'
     fs = 16000
 
-    class_dict = {'backward': 0, 'bed': 1, 'bird': 2, 'cat': 3, 'dog': 4, 'down': 5,
-                  'eight': 6, 'five': 7, 'follow': 8, 'forward': 9, 'four': 10, 'go': 11,
-                  'happy': 12, 'house': 13, 'learn': 14, 'left': 15, 'librispeech': 16,
-                  'marvin': 17, 'nine': 18, 'no': 19, 'off': 20, 'on': 21, 'one': 22,
-                  'right': 23, 'seven': 24, 'sheila': 25, 'six': 26, 'stop': 27,
-                  'three': 28, 'tree': 29, 'two': 30, 'up': 31, 'visual': 32, 'wow': 33,
-                  'yes': 34, 'zero': 35}
+    class_dict = {'backward': 0, 'bark': 1, 'bed': 2, 'bird': 3, 'cat': 4, 'dog': 5, 'down': 6,
+                  'eight': 7, 'five': 8, 'follow': 9, 'forward': 10, 'four': 11, 'go': 12,
+                  'happy': 13, 'horse': 14, 'horsecough': 15, 'house': 16, 'learn': 17, 'left': 18, 'librispeech': 19,
+                  'marvin': 20, 'nine': 21, 'no': 22, 'off': 23, 'on': 24, 'one': 25, 'outside': 26,
+                  'right': 27, 'seven': 28, 'sheila': 29, 'six': 30, 'stop': 31,
+                  'three': 32, 'tree': 33, 'two': 34, 'up': 35, 'visual': 36, 'wow': 37,
+                  'yes': 38, 'zero': 39}
 
     def __init__(self, root, classes, d_type, t_type, transform=None, quantization_scheme=None,
                  augmentation=None, download=False, save_unquantized=False):
@@ -654,6 +654,61 @@ def KWS_get_datasets(data, load_train=True, load_test=True, num_classes=6):
 
     return train_dataset, test_dataset
 
+def KWS_equine_get_datasets(data, load_train=True, load_test=True, num_classes=4):
+    """
+    Load the folded 1D version of SpeechCom dataset
+
+    The dataset is loaded from the archive file, so the file is required for this version.
+
+    The dataset originally includes 30 keywords. A dataset is formed with 7 or 21 classes which
+    includes 6 or 20 of the original keywords and the rest of the
+    dataset is used to form the last class, i.e class of the unknowns.
+    To further improve the detection of unknown words, the librispeech dataset is also downloaded
+    and converted to 1 second segments to be used as unknowns as well.
+    The dataset is split into training+validation and test sets. 90:10 training+validation:test
+    split is used by default.
+
+    Data is augmented to 3x duplicate data by random stretch/shift and randomly adding noise where
+    the stretching coefficient, shift amount and noise variance are randomly selected between
+    0.8 and 1.3, -0.1 and 0.1, 0 and 1, respectively.
+    """
+    (data_dir, args) = data
+
+    transform = transforms.Compose([
+        ai8x.normalize(args=args)
+    ])
+
+    if num_classes in (4, 20):
+        classes = next((e for _, e in enumerate(datasets)
+                        if len(e['output']) - 1 == num_classes))['output'][:-1]
+    else:
+        raise ValueError(f'Unsupported num_classes {num_classes}')
+
+    augmentation = {'aug_num': 2, 'shift': {'min': -0.15, 'max': 0.15},
+                    'noise_var': {'min': 0, 'max': 1.0}}
+    quantization_scheme = {'compand': False, 'mu': 10}
+
+    if load_train:
+        train_dataset = KWS(root=data_dir, classes=classes, d_type='train',
+                            transform=transform, t_type='keyword',
+                            quantization_scheme=quantization_scheme,
+                            augmentation=augmentation, download=True)
+    else:
+        train_dataset = None
+
+    if load_test:
+        test_dataset = KWS(root=data_dir, classes=classes, d_type='test',
+                           transform=transform, t_type='keyword',
+                           quantization_scheme=quantization_scheme,
+                           augmentation=augmentation, download=True)
+
+        if args.truncate_testset:
+            test_dataset.data = test_dataset.data[:1]
+    else:
+        test_dataset = None
+
+    return train_dataset, test_dataset
+
 
 def KWS_20_get_datasets(data, load_train=True, load_test=True):
     """
@@ -673,7 +728,7 @@ def KWS_20_get_datasets(data, load_train=True, load_test=True):
     the stretching coefficient, shift amount and noise variance are randomly selected between
     0.8 and 1.3, -0.1 and 0.1, 0 and 1, respectively.
     """
-    return KWS_get_datasets(data, load_train, load_test, num_classes=20)
+    return KWS_get_datasets(data, load_train, load_test, num_classes=24)
 
 
 def KWS_get_unquantized_datasets(data, load_train=True, load_test=True, num_classes=6):
@@ -732,6 +787,13 @@ datasets = [
         'output': ('up', 'down', 'left', 'right', 'stop', 'go', 'UNKNOWN'),
         'weight': (1, 1, 1, 1, 1, 1, 0.06),
         'loader': KWS_get_datasets,
+    },
+     {
+        'name': 'KWS_equine',  # 5 keywords
+        'input': (128, 128),
+        'output': ('bark', 'horse', 'horsecough', 'outside', 'UNKNOWN'),
+        'weight': (0.498, 1, 0.554, 0.907, 0.02),
+        'loader': KWS_equine_get_datasets,
     },
     {
         'name': 'KWS_20',  # 20 keywords
